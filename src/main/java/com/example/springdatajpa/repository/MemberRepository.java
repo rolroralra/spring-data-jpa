@@ -3,17 +3,21 @@ package com.example.springdatajpa.repository;
 import com.example.springdatajpa.controller.dto.MemberDto;
 import com.example.springdatajpa.domain.Member;
 import com.example.springdatajpa.repository.custom.CustomMemberRepository;
+import com.example.springdatajpa.repository.projection.MemberInfoOnly;
+import com.example.springdatajpa.repository.projection.MemberProjection;
 import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
-public interface MemberRepository extends JpaRepository<Member, Long>, CustomMemberRepository {
+public interface MemberRepository extends JpaRepository<Member, Long>, CustomMemberRepository,
+    JpaSpecificationExecutor<Member> {
 
     List<Member> findByNameAndAgeGreaterThan(String name, Integer age);
 
@@ -38,7 +42,6 @@ public interface MemberRepository extends JpaRepository<Member, Long>, CustomMem
     @Query("select m from Member m where m.name in :names")
     List<Member> findByNames(@Param("names") List<String> names);
 
-    @EntityGraph()
     Page<Member> findByAge(int age, Pageable pageable);
 
     Slice<Member> findMemberByAge(int age, Pageable pageable);
@@ -57,4 +60,20 @@ public interface MemberRepository extends JpaRepository<Member, Long>, CustomMem
     @EntityGraph(value = "Member.all")
     @Query("select m from Member m")
     List<Member> findMemberByNamedEntityGraph();
+
+//    List<MemberNameOnly> findProjectionsByName(String name);
+
+    List<MemberInfoOnly> findProjectionsByName(String name);
+
+    <T> List<T> findProjectionsByName(String name, Class<T> type);
+
+    @Query(value = "SELECT * FROM MEMBER WHERE NAME = ?1", nativeQuery = true)
+    Member findByNativeQuery(String name);
+
+    @Query(
+        value = "SELECT m.ID, m.NAME, t.NAME as teamName FROM MEMBER m LEFT JOIN TEAM t",
+        countQuery = "SELECT COUNT(*) FROM MEMBER",
+        nativeQuery = true
+    )
+    Page<MemberProjection> findByNativeProjection(Pageable pageable);
 }

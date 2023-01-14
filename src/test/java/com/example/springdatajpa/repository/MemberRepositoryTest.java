@@ -6,6 +6,11 @@ import com.example.springdatajpa.controller.dto.MemberDto;
 import com.example.springdatajpa.domain.Member;
 import com.example.springdatajpa.domain.Team;
 import com.example.springdatajpa.repository.common.JpaRepositoryTest;
+import com.example.springdatajpa.repository.projection.MemberInfoOnly;
+import com.example.springdatajpa.repository.projection.MemberNameOnlyDto;
+import com.example.springdatajpa.repository.projection.MemberProjection;
+import com.example.springdatajpa.repository.projection.NestedClosedProjection;
+import com.example.springdatajpa.repository.spec.MemberSpec;
 import java.util.List;
 import java.util.Optional;
 import javax.persistence.EntityManager;
@@ -14,11 +19,14 @@ import org.hibernate.Hibernate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Example;
+import org.springframework.data.domain.ExampleMatcher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.Sort.Order;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 class MemberRepositoryTest extends JpaRepositoryTest<Member, Long> {
@@ -137,7 +145,7 @@ class MemberRepositoryTest extends JpaRepositoryTest<Member, Long> {
     }
 
     @Test
-    @DisplayName("")
+    @DisplayName("findMemberByName")
     void findMemberByName() {
         // Given
         Member m1 = new Member("AAA", 10);
@@ -154,7 +162,7 @@ class MemberRepositoryTest extends JpaRepositoryTest<Member, Long> {
     }
 
     @Test
-    @DisplayName("")
+    @DisplayName("findUser")
     void findUser() {
         // Given
         Member m1 = new Member("AAA", 10);
@@ -372,8 +380,11 @@ class MemberRepositoryTest extends JpaRepositoryTest<Member, Long> {
         // Then
         assertThat(resultCount).isEqualTo(5);
         Page<Member> page = memberRepository.findByAge(51, PageRequest.of(0, 10));
-        assertThat(page.getContent()).hasSize(5)
-            .containsOnly(m1, m2, m3, m4, m5);
+        List<Member> result = page.getContent();
+        assertThat(result).hasSize(5);
+        result.forEach(member ->
+            assertThat(member).hasFieldOrPropertyWithValue("age", 51)
+        );
     }
 
     @Test
@@ -489,5 +500,263 @@ class MemberRepositoryTest extends JpaRepositoryTest<Member, Long> {
             PersistenceUnitUtil util = em.getEntityManagerFactory().getPersistenceUnitUtil();
             assertThat(util.isLoaded(member.getTeam())).isTrue();
         });
+    }
+
+    @Test
+    @DisplayName("jpaSpecificationExecutor")
+    void jpaSpecificationExecutor() {
+        // Given
+        Team teamA = new Team("teamA");
+        em.persist(teamA);
+
+        Member m1 = new Member("memberName1", 10, teamA);
+        Member m2 = new Member("memberName2", 10, teamA);
+        em.persist(m1);
+        em.persist(m2);
+        em.flush();
+        em.clear();
+
+        // When
+        Specification<Member> spec = MemberSpec.memberName("memberName1")
+            .and(MemberSpec.teamName("teamA"));
+
+        List<Member> result = memberRepository.findAll(spec);
+
+        // Then
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("findQueryByExample")
+    void findQueryByExample() {
+        // Given
+        Team teamA = new Team("teamA");
+        em.persist(teamA);
+
+        Member m1 = new Member("memberName1", 10, teamA);
+        Member m2 = new Member("memberName2", 10, teamA);
+        em.persist(m1);
+        em.persist(m2);
+        em.flush();
+        em.clear();
+
+        // When
+        Member member = new Member("memberName1");
+        Team team = new Team("teamA");
+        member.changeTeam(team);
+
+        ExampleMatcher exampleMatcher = ExampleMatcher.matching().withIgnorePaths("age");
+
+        Example<Member> example = Example.of(member, exampleMatcher);
+
+        List<Member> result = memberRepository.findAll(example);
+
+        // Then
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("closedProjection")
+    void closedProjection() {
+        // Given
+        Team teamA = new Team("teamA");
+        em.persist(teamA);
+
+        // When
+        Member m1 = new Member("m1", 10, teamA);
+        Member m2 = new Member("m2", 10, teamA);
+
+        em.persist(m1);
+        em.persist(m2);
+
+        em.flush();
+        em.clear();
+
+//        List<MemberNameOnly> result = memberRepository.findProjectionsByName("m1");
+
+        // Then
+//        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    @DisplayName("openProjection")
+    void openProjection() {
+        // Given
+        Team teamA = new Team("teamA");
+        em.persist(teamA);
+
+        // When
+        Member m1 = new Member("m1", 10, teamA);
+        Member m2 = new Member("m2", 10, teamA);
+
+        em.persist(m1);
+        em.persist(m2);
+
+        em.flush();
+        em.clear();
+
+        List<MemberInfoOnly> result = memberRepository.findProjectionsByName("m1");
+
+        // Then
+        assertThat(result).hasSize(1);
+
+        result.stream().map(MemberInfoOnly::getMemberInfo).forEach(System.out::println);
+    }
+
+    @Test
+    @DisplayName("dynamicProjection")
+    void dynamicProjection() {
+        // Given
+        Team teamA = new Team("teamA");
+        em.persist(teamA);
+
+        // When
+        Member m1 = new Member("m1", 10, teamA);
+        Member m2 = new Member("m2", 10, teamA);
+
+        em.persist(m1);
+        em.persist(m2);
+
+        em.flush();
+        em.clear();
+
+        // Dynamic Projection 의 경우, 매핑할 파라미터에 맞는 생성자가 1개 있어야함.
+        List<MemberNameOnlyDto> result = memberRepository.findProjectionsByName("m1", MemberNameOnlyDto.class);
+
+        // Then
+        assertThat(result).hasSize(1);
+
+        result.stream().map(MemberNameOnlyDto::getName).forEach(System.out::println);
+    }
+
+    @Test
+    @DisplayName("nestedClosedProjection")
+    void nestedClosedProjection() {
+        // Given
+        Team teamA = new Team("teamA");
+        em.persist(teamA);
+
+        // When
+        Member m1 = new Member("m1", 10, teamA);
+        Member m2 = new Member("m2", 10, teamA);
+
+        em.persist(m1);
+        em.persist(m2);
+
+        em.flush();
+        em.clear();
+
+        List<NestedClosedProjection> result = memberRepository.findProjectionsByName("m1", NestedClosedProjection.class);
+
+        // Then
+        assertThat(result).hasSize(1);
+
+        result.forEach(proj -> {
+            System.out.println("proj.getName() = " + proj.getName());
+            System.out.println("proj.getTeam().getName() = " + proj.getTeam().getName());
+        });
+    }
+
+    @Test
+    @DisplayName("findByNativeProjection")
+    void findByNativeProjection() {
+        // Given
+        Team teamA = new Team("teamA");
+        Team teamB = new Team("teamB");
+
+        teamRepository.save(teamA);
+        teamRepository.save(teamB);
+
+        Member member1 = new Member("member1", 10, teamA);
+        Member member2 = new Member("member2", 20, teamA);
+        Member member3 = new Member("member3", 30, teamB);
+        Member member4 = new Member("member4", 40, teamB);
+
+        memberRepository.save(member1);
+        memberRepository.save(member2);
+        memberRepository.save(member3);
+        memberRepository.save(member4);
+
+        em.flush();
+        em.clear();
+
+        // When
+        Page<MemberProjection> page = memberRepository.findByNativeProjection(
+            PageRequest.of(0, 3));
+
+        // Then
+        assertThat(page).hasSize(3);
+        page.getContent().forEach(memberProjection -> {
+            System.out.println("memberProjection.getId() = " + memberProjection.getId());
+            System.out.println("memberProjection.getName() = " + memberProjection.getName());
+            System.out.println("memberProjection.getTeamName() = " + memberProjection.getTeamName());
+        });
+    }
+
+    @Test
+    @DisplayName("findNativeQuery")
+    void findNativeQuery() {
+        // Given
+        Team teamA = new Team("teamA");
+        Team teamB = new Team("teamB");
+
+        teamRepository.save(teamA);
+        teamRepository.save(teamB);
+
+        Member member1 = new Member("m1", 10, teamA);
+        Member member2 = new Member("m2", 20, teamA);
+        Member member3 = new Member("m3", 30, teamB);
+        Member member4 = new Member("m4", 40, teamB);
+
+        memberRepository.save(member1);
+        memberRepository.save(member2);
+        memberRepository.save(member3);
+        memberRepository.save(member4);
+
+        em.flush();
+        em.clear();
+
+        // When
+        Member result = memberRepository.findByNativeQuery("m2");
+
+        // Hibenate Transformers 의 경우, DTO 클래스에 기본생성자가 있어야함.
+
+        // Then
+        assertThat(result).isNotNull()
+            .hasFieldOrPropertyWithValue("name", "m2")
+            .hasFieldOrPropertyWithValue("age", 20);
+    }
+
+    @Test
+    @DisplayName("findNativeQueryByHibernate")
+    void findNativeQueryByHibernate() {
+        // Given
+        Team teamA = new Team("teamA");
+        Team teamB = new Team("teamB");
+
+        teamRepository.save(teamA);
+        teamRepository.save(teamB);
+
+        Member member1 = new Member("member1", 10, teamA);
+        Member member2 = new Member("member2", 20, teamA);
+        Member member3 = new Member("member3", 30, teamB);
+        Member member4 = new Member("member4", 40, teamB);
+
+        memberRepository.save(member1);
+        memberRepository.save(member2);
+        memberRepository.save(member3);
+        memberRepository.save(member4);
+
+        em.flush();
+        em.clear();
+
+        // When
+        List<MemberDto> result = memberRepository.findNativeQueryByHibernate(0, 3);
+
+        // Hibenate Transformers 의 경우, DTO 클래스에 기본생성자가 있어야함.
+
+        // Then
+        assertThat(result).hasSize(3);
+        result.forEach(memberDto -> System.out.println("memberDto.getName() = " + memberDto.getName()));
     }
 }

@@ -61,6 +61,10 @@ public class Member {
     }
 
     public void changeTeam(Team team) {
+        if (this.team == team) {
+            return;
+        }
+
         if (this.team != null) {
             this.team.removeMember(this);
         }

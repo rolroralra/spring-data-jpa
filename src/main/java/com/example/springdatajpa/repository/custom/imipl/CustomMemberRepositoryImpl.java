@@ -1,10 +1,13 @@
 package com.example.springdatajpa.repository.custom.imipl;
 
+import com.example.springdatajpa.controller.dto.MemberDto;
 import com.example.springdatajpa.domain.Member;
 import com.example.springdatajpa.repository.custom.CustomMemberRepository;
 import java.util.List;
 import javax.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.query.NativeQuery;
+import org.hibernate.transform.Transformers;
 
 @RequiredArgsConstructor
 public class CustomMemberRepositoryImpl implements CustomMemberRepository {
@@ -39,5 +42,19 @@ public class CustomMemberRepositoryImpl implements CustomMemberRepository {
         return em.createQuery("update Member m set m.age = m.age + 1 where m.age >= :age")
             .setParameter("age", age)
             .executeUpdate();
+    }
+
+    @Override
+    @SuppressWarnings({"unchecked", "deprecation"})
+    public List<MemberDto> findNativeQueryByHibernate(int offset, int size) {
+        String nativeQuery = "SELECT m.name as name from MEMBER m";
+
+        return em.createNativeQuery(nativeQuery)
+            .setFirstResult(offset)
+            .setMaxResults(size)
+            .unwrap(NativeQuery.class)
+            .addScalar("name")
+            .setResultTransformer(Transformers.aliasToBean(MemberDto.class))
+            .getResultList();
     }
 }

@@ -1,5 +1,6 @@
 package com.example.springdatajpa.repository.custom;
 
+import com.example.springdatajpa.controller.dto.MemberDto;
 import com.example.springdatajpa.domain.Member;
 import java.util.List;
 
@@ -11,4 +12,6 @@ public interface CustomMemberRepository {
     long countByAge(int age);
 
     int bulkAgePlus(int age);
+
+    List<MemberDto> findNativeQueryByHibernate(int offset, int size);
 }
